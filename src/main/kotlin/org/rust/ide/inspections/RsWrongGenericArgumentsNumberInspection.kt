@@ -6,12 +6,13 @@
 package org.rust.ide.inspections
 
 import com.intellij.codeInspection.LocalQuickFix
-import org.rust.ide.inspections.fixes.AddTypeArguments
-import org.rust.ide.inspections.fixes.RemoveTypeArguments
+import org.rust.ide.inspections.fixes.AddGenericArguments
+import org.rust.ide.inspections.fixes.RemoveGenericArguments
 import org.rust.lang.core.psi.*
 import org.rust.lang.core.psi.ext.*
 import org.rust.lang.utils.RsDiagnostic
 import org.rust.lang.utils.addToHolder
+import org.rust.openapiext.createSmartPointer
 
 /**
  * Inspection that detects the E0107 error.
@@ -36,8 +37,8 @@ class RsWrongGenericArgumentsNumberInspection : RsLocalInspectionTool() {
     // Don't apply generic declaration checks to Fn-traits and `Self`
     private fun isPathValid(path: RsPath?): Boolean = path?.valueParameterList == null && path?.cself == null
 
-    private fun checkTypeArguments(holder: RsProblemsHolder, o: RsElement) {
-        val (actualArguments, declaration) = getTypeArgumentsAndDeclaration(o) ?: return
+    private fun checkTypeArguments(holder: RsProblemsHolder, element: RsElement) {
+        val (actualArguments, declaration) = getTypeArgumentsAndDeclaration(element) ?: return
 
         val actualTypeArgs = actualArguments?.typeReferenceList?.size ?: 0
         val actualConstArgs = actualArguments?.exprList?.size ?: 0
@@ -51,7 +52,7 @@ class RsWrongGenericArgumentsNumberInspection : RsLocalInspectionTool() {
 
         val expectedRequiredParams = declaration.requiredGenericParameters.size
 
-        val errorText = when (o) {
+        val errorText = when (element) {
             is RsBaseType, is RsTraitRef -> checkTypeReference(actualArgs, expectedRequiredParams, expectedTotalParams)
             is RsMethodCall, is RsCallExpr -> checkFunctionCall(actualArgs, expectedRequiredParams, expectedTotalParams)
             else -> null
@@ -66,9 +67,9 @@ class RsWrongGenericArgumentsNumberInspection : RsLocalInspectionTool() {
         }
 
         val problemText = "Wrong number of $argumentName arguments: expected $errorText, found $actualArgs"
-        val fixes = getFixes(o, actualArgs, expectedTotalParams)
+        val fixes = getFixes(declaration, element, actualArgs, expectedTotalParams)
 
-        RsDiagnostic.WrongNumberOfGenericArguments(o, problemText, fixes).addToHolder(holder)
+        RsDiagnostic.WrongNumberOfGenericArguments(element, problemText, fixes).addToHolder(holder)
     }
 }
 
@@ -92,12 +93,16 @@ private fun checkFunctionCall(actualArgs: Int, expectedRequiredParams: Int, expe
     }
 }
 
-private fun getFixes(element: RsElement, actualArgs: Int, expectedTotalParams: Int): List<LocalQuickFix> =
-    when {
-        actualArgs > expectedTotalParams -> listOf(RemoveTypeArguments(expectedTotalParams, actualArgs))
-        actualArgs < expectedTotalParams -> listOf(AddTypeArguments(element))
-        else -> emptyList()
-    }
+private fun getFixes(
+    declaration: RsGenericDeclaration,
+    element: RsElement,
+    actualArgs: Int,
+    expectedTotalParams: Int
+): List<LocalQuickFix> = when {
+    actualArgs > expectedTotalParams -> listOf(RemoveGenericArguments(expectedTotalParams, actualArgs))
+    actualArgs < expectedTotalParams -> listOf(AddGenericArguments(declaration.createSmartPointer(), element))
+    else -> emptyList()
+}
 
 fun getTypeArgumentsAndDeclaration(element: RsElement): Pair<RsTypeArgumentList?, RsGenericDeclaration>? {
     val (arguments, resolved) = when (element) {
