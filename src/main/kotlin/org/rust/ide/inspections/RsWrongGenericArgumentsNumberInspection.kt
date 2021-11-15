@@ -9,10 +9,7 @@ import com.intellij.codeInspection.LocalQuickFix
 import org.rust.ide.inspections.fixes.AddTypeArguments
 import org.rust.ide.inspections.fixes.RemoveTypeArguments
 import org.rust.lang.core.psi.*
-import org.rust.lang.core.psi.ext.RsElement
-import org.rust.lang.core.psi.ext.RsGenericDeclaration
-import org.rust.lang.core.psi.ext.constParameters
-import org.rust.lang.core.psi.ext.typeParameters
+import org.rust.lang.core.psi.ext.*
 import org.rust.lang.utils.RsDiagnostic
 import org.rust.lang.utils.addToHolder
 
@@ -43,17 +40,16 @@ class RsWrongGenericArgumentsNumberInspection : RsLocalInspectionTool() {
         val (actualArguments, declaration) = getTypeArgumentsAndDeclaration(o) ?: return
 
         val actualTypeArgs = actualArguments?.typeReferenceList?.size ?: 0
-        val expectedTotalTypeParams = declaration.typeParameters.size
-        val expectedRequiredTypeParams = declaration.typeParameters.count { it.typeReference == null }
-
         val actualConstArgs = actualArguments?.exprList?.size ?: 0
-        val expectedTotalConstParams = declaration.constParameters.size
-
         val actualArgs = actualTypeArgs + actualConstArgs
+
+        val expectedTotalTypeParams = declaration.typeParameters.size
+        val expectedTotalConstParams = declaration.constParameters.size
         val expectedTotalParams = expectedTotalTypeParams + expectedTotalConstParams
-        val expectedRequiredParams = expectedRequiredTypeParams + expectedTotalConstParams
 
         if (actualArgs == expectedTotalParams) return
+
+        val expectedRequiredParams = declaration.requiredGenericParameters.size
 
         val errorText = when (o) {
             is RsBaseType, is RsTraitRef -> checkTypeReference(actualArgs, expectedRequiredParams, expectedTotalParams)
@@ -70,9 +66,9 @@ class RsWrongGenericArgumentsNumberInspection : RsLocalInspectionTool() {
         }
 
         val problemText = "Wrong number of $argumentName arguments: expected $errorText, found $actualArgs"
-        val fixes = getFixes(o, actualTypeArgs, expectedTotalTypeParams)
+        val fixes = getFixes(o, actualArgs, expectedTotalParams)
 
-        RsDiagnostic.WrongNumberOfTypeArguments(o, problemText, fixes).addToHolder(holder)
+        RsDiagnostic.WrongNumberOfGenericArguments(o, problemText, fixes).addToHolder(holder)
     }
 }
 
