@@ -419,7 +419,7 @@ fun <T, D> getCachedOrCompute(
     return value
 }
 
-inline fun <R> nonBlocking(project: Project, crossinline block: () -> R, crossinline uiContinuation: (R) -> Unit) {
+inline fun <R> Project.nonBlocking(crossinline block: () -> R, crossinline uiContinuation: (R) -> Unit) {
     if (isUnitTestMode) {
         val result = block()
         uiContinuation(result)
@@ -427,8 +427,8 @@ inline fun <R> nonBlocking(project: Project, crossinline block: () -> R, crossin
         ReadAction.nonBlocking(Callable {
             block()
         })
-            .inSmartMode(project)
-            .expireWith(RsPluginDisposable.getInstance(project))
+            .inSmartMode(this)
+            .expireWith(RsPluginDisposable.getInstance(this))
             .finishOnUiThread(ModalityState.current()) { result ->
                 uiContinuation(result)
             }.submit(AppExecutorUtil.getAppExecutorService())
