@@ -631,6 +631,13 @@ open class PsiSubstitutingPsiRenderer(
                     }
                     true
                 }
+                is RsPsiSubstitution.Value.DefaultValue -> {
+                    when (s.value) {
+                        is RsExpr -> appendConstExpr(sb, s.value)
+                        is RsTypeReference -> appendTypeReference(sb, s.value)
+                    }
+                    true
+                }
                 else -> false
             }
             else -> false

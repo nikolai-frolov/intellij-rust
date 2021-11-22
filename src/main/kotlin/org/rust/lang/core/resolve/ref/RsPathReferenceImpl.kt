@@ -308,10 +308,24 @@ fun pathPsiSubst(path: RsPath, resolved: RsGenericDeclaration): RsPsiSubstitutio
 
     val usedTypeArguments = typeSubst.values.mapNotNullToSet { (it as? TypeValue.Present.InAngles)?.value }
 
-    val constParameters = resolved.constParameters
     val constArguments = (args as? RsPsiPathParameters.InAngles)?.typeOrConstArgs
         ?.let { list -> list.filter { it !is RsTypeReference || it !in usedTypeArguments && it is RsBaseType} }
-    val constSubst = associateSubst(constParameters, constArguments, areOptionalArgs)
+
+    val constSubst = resolved.constParameters.withIndex().associate { (i, param) ->
+        val value = if (areOptionalArgs && constArguments == null) {
+            Value.OptionalAbsent
+        } else if (constArguments != null && i < constArguments.size) {
+            Value.Present(constArguments[i])
+        } else {
+            val defaultValue = param.expr
+            if (defaultValue != null) {
+                Value.DefaultValue(defaultValue)
+            } else {
+                Value.RequiredAbsent
+            }
+        }
+        param to value
+    }
 
     val assocTypes = run {
         if (resolved is RsTraitItem) {

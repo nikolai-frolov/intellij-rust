@@ -27,6 +27,7 @@ import org.rust.lang.core.types.ty.TyFloat.F32
 import org.rust.lang.core.types.ty.TyFloat.F64
 import org.rust.lang.core.types.ty.TyInteger.*
 import org.rust.lang.utils.CargoProjectCache
+import org.rust.lang.utils.evaluation.evaluate
 import org.rust.openapiext.testAssert
 import org.rust.stdext.Cache
 import org.rust.stdext.buildList
@@ -1092,7 +1093,7 @@ private sealed class SelectionCandidate {
 
 private fun prepareSubstAndTraitRefRaw(
     ctx: RsInferenceContext,
-    generics: List<TyTypeParameter>,
+    typeGenerics: List<TyTypeParameter>,
     constGenerics: List<CtConstParameter>,
     formalSelfTy: Ty,
     formalTrait: BoundElement<RsTraitItem>,
@@ -1100,17 +1101,27 @@ private fun prepareSubstAndTraitRefRaw(
     recursionDepth: Int
 ): Triple<Substitution, TraitRef, List<Obligation>> {
     val subst = Substitution(
-        typeSubst = generics.associateWith { ctx.typeVarForParam(it) },
+        typeSubst = typeGenerics.associateWith { ctx.typeVarForParam(it) },
         constSubst = constGenerics.associateWith { ctx.constVarForParam(it) }
     )
-    val boundSubst = formalTrait.substitute(subst).subst.mapTypeValues { (k, v) ->
-        if (k == v && k.parameter is TyTypeParameter.Named) {
-            // Default type parameter values `trait Tr<T=Foo> {}`
-            k.parameter.parameter.typeReference?.type?.substitute(subst) ?: v
-        } else {
-            v
+    val boundSubst = formalTrait.substitute(subst).subst
+        .mapTypeValues { (k, v) ->
+            if (k == v && k.parameter is TyTypeParameter.Named) {
+                // Default type parameter values `trait Tr<T = Foo> {}`
+                k.parameter.parameter.typeReference?.type?.substitute(subst) ?: v
+            } else {
+                v
+            }
         }
-    }.substituteInValues(mapOf(TyTypeParameter.self() to selfTy).toTypeSubst())
+        .mapConstValues { (k, v) ->
+            if (k == v) {
+                // Default const parameter values `trait Tr<const N: usize = 0> {}`
+                val expectedTy = k.parameter.typeReference?.type?.substitute(subst) ?: TyUnknown
+                k.parameter.expr?.evaluate(expectedTy)?.substitute(subst) ?: v
+            } else {
+                v
+            }
+        }.substituteInValues(mapOf(TyTypeParameter.self() to selfTy).toTypeSubst())
     val (normSelfTy, obligations) = ctx.normalizeAssociatedTypesIn(formalSelfTy.substitute(subst), recursionDepth)
     return Triple(subst, TraitRef(normSelfTy, BoundElement(formalTrait.element, boundSubst)), obligations)
 }

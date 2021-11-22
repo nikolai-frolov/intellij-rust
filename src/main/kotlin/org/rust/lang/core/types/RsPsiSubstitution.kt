@@ -41,6 +41,7 @@ open class RsPsiSubstitution(
         object RequiredAbsent : Value<Nothing>()
         object OptionalAbsent : Value<Nothing>()
         class Present<T>(val value: T) : Value<T>()
+        class DefaultValue<T>(val value: T) : Value<T>()
     }
 }
 
@@ -63,9 +64,10 @@ fun RsPsiSubstitution.toSubst(resolver: PathExprResolver? = PathExprResolver.def
 
     val regionSubst = regionSubst.entries.mapNotNull { (psiParam, psiValue) ->
         val param = ReEarlyBound(psiParam)
-        val value = when (psiValue) {
-            RsPsiSubstitution.Value.RequiredAbsent, RsPsiSubstitution.Value.OptionalAbsent -> return@mapNotNull null
-            is RsPsiSubstitution.Value.Present -> psiValue.value.resolve()
+        val value = if (psiValue is RsPsiSubstitution.Value.Present) {
+            psiValue.value.resolve()
+        } else {
+            return@mapNotNull null
         }
 
         param to value
@@ -79,7 +81,7 @@ fun RsPsiSubstitution.toSubst(resolver: PathExprResolver? = PathExprResolver.def
             is RsPsiSubstitution.Value.Present -> {
                 val expectedTy = param.parameter.typeReference?.type ?: TyUnknown
                 when (val value = psiValue.value) {
-                    is RsExpr -> value.evaluate(expectedTy, resolver)
+                    is RsExpr -> value.evaluate(expectedTy, resolver) // TODO check types
                     is RsBaseType -> when (val resolved = value.path?.reference?.resolve()) {
                         is RsConstParameter -> CtConstParameter(resolved)
                         is RsConstant -> when {
@@ -94,6 +96,10 @@ fun RsPsiSubstitution.toSubst(resolver: PathExprResolver? = PathExprResolver.def
                     }
                     else -> CtUnknown
                 }
+            }
+            is RsPsiSubstitution.Value.DefaultValue -> {
+                val expr = psiValue.value as? RsExpr
+                expr?.evaluate(psiParam.typeReference?.type ?: TyUnknown) ?: CtUnknown
             }
         }
 
