@@ -654,11 +654,21 @@ class RsTypeInferenceWalker(
 
         val constParameters = callee.element.constParameters.map { CtConstParameter(it) }
         val resolver = PathExprResolver.fromContext(ctx)
-        val constArguments = methodCall.constArguments.withIndex().map { (i, expr) ->
-            val expectedTy = constParameters.getOrNull(i)?.parameter?.typeReference?.type ?: TyUnknown
-            expr.evaluate(expectedTy, resolver)
-        }
-        val constSubst = constParameters.zip(constArguments).toMap()
+        val constSubst = constParameters.zip(methodCall.constArguments).mapNotNull { (param, expr) ->
+            val expectedTy = param.parameter.typeReference?.type ?: TyUnknown
+            param to when (expr) {
+                is RsExpr -> expr.evaluate(expectedTy, resolver)
+                is RsTypeReference -> {
+                    when (val element = (expr as? RsBaseType)?.path?.reference?.resolve()) {
+                        is RsConstant -> element.expr?.evaluate(element.typeReference?.type ?: expectedTy, resolver)
+                            ?: return@mapNotNull null
+                        is RsConstParameter -> CtConstParameter(element)
+                        else -> return@mapNotNull null
+                    }
+                }
+                else -> return@mapNotNull null
+            }
+        }.toMap()
 
         val fnSubst = Substitution(typeSubst = typeSubst, constSubst = constSubst)
         unifySubst(fnSubst, newSubst)
@@ -790,8 +800,24 @@ class RsTypeInferenceWalker(
         }
     }
 
-    fun inferConstArgumentTypes(constParameters: List<RsConstParameter>, constArguments: List<RsExpr>) {
-        inferArgumentTypes(constParameters.map { it.typeReference?.type ?: TyUnknown }, constArguments)
+    fun inferConstArgumentTypes(constParameters: List<RsConstParameter>, constArguments: List<RsElement>) {
+        val argDefs = constParameters.asSequence()
+            .map { it.typeReference?.type ?: TyUnknown }
+            .map(ctx::resolveTypeVarsIfPossible)
+            .infiniteWithTyUnknown()
+        for ((type, expr) in argDefs.zip(constArguments.asSequence())) {
+            when (expr) {
+                is RsExpr -> expr.inferTypeCoercableTo(type)
+                is RsTypeReference -> {
+                    val typeReference = when (val def = (expr as? RsBaseType)?.path?.reference?.resolve()) {
+                        is RsConstant -> def.typeReference?.takeIf { def.isConst }
+                        is RsConstParameter -> def.typeReference
+                        else -> null
+                    }
+                    coerce(expr, typeReference?.type ?: TyUnknown, type)
+                }
+            }
+        }
     }
 
     private fun inferFieldExprType(receiver: Ty, fieldLookup: RsFieldLookup): Ty {
