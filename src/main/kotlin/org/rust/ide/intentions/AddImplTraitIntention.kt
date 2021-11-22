@@ -13,10 +13,13 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.SmartPsiElementPointer
-import org.rust.ide.inspections.fixes.insertTypeArgumentsIfNeeded
+import org.rust.ide.inspections.fixes.insertGenericArgumentsIfNeeded
 import org.rust.ide.refactoring.implementMembers.generateMissingTraitMembers
 import org.rust.ide.utils.template.newTemplateBuilder
-import org.rust.lang.core.psi.*
+import org.rust.lang.core.psi.RsBaseType
+import org.rust.lang.core.psi.RsImplItem
+import org.rust.lang.core.psi.RsPath
+import org.rust.lang.core.psi.RsPsiFactory
 import org.rust.lang.core.psi.ext.*
 import org.rust.openapiext.createSmartPointer
 
@@ -63,8 +66,8 @@ class AddImplTraitIntention : RsElementBaseIntentionAction<AddImplTraitIntention
         val traitRef = impl.traitRef ?: return
         val trait = traitRef.resolveToBoundTrait() ?: return
 
-        val insertedTypeArgumentsPtr = if (trait.element.requiredGenericParameters.isNotEmpty()) {
-            insertTypeArgumentsIfNeeded(traitRef)?.map { it.createSmartPointer() }
+        val insertedGenericArgumentsPtr = if (trait.element.requiredGenericParameters.isNotEmpty()) {
+            insertGenericArgumentsIfNeeded(traitRef)?.map { it.createSmartPointer() }
         } else {
             null
         }
@@ -74,14 +77,14 @@ class AddImplTraitIntention : RsElementBaseIntentionAction<AddImplTraitIntention
         showTypeArgumentsTemplate(
             editor,
             CodeInsightUtilCore.forcePsiPostprocessAndRestoreElement(impl) ?: return,
-            insertedTypeArgumentsPtr
+            insertedGenericArgumentsPtr
         )
     }
 
     private fun showTypeArgumentsTemplate(
         editor: Editor,
         impl: RsImplItem,
-        insertedTypeArgumentsPtr: List<SmartPsiElementPointer<RsTypeReference>>?
+        insertedTypeArgumentsPtr: List<SmartPsiElementPointer<RsElement>>?
     ) {
         val insertedTypeArguments = insertedTypeArgumentsPtr?.mapNotNull { it.element }?.filterIsInstance<RsBaseType>()
         if (insertedTypeArguments != null && insertedTypeArguments.isNotEmpty()) {
