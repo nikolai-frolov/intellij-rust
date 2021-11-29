@@ -99,11 +99,11 @@ class RustParserDefinition : ParserDefinition {
         /**
          * Should be increased after any change of lexer rules
          */
-        const val LEXER_VERSION: Int = 3
+        const val LEXER_VERSION: Int = 4
 
         /**
          * Should be increased after any change of parser rules
          */
-        const val PARSER_VERSION: Int = LEXER_VERSION + 35
+        const val PARSER_VERSION: Int = LEXER_VERSION + 36
     }
 }

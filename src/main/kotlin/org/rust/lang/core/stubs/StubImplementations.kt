@@ -70,7 +70,7 @@ class RsFileStub(
     override fun getType() = Type
 
     object Type : IStubFileElementType<RsFileStub>(RsLanguage) {
-        private const val STUB_VERSION = 221
+        private const val STUB_VERSION = 222
 
         // Bump this number if Stub structure changes
         override fun getStubVersion(): Int = RustParserDefinition.PARSER_VERSION + STUB_VERSION
@@ -269,6 +269,7 @@ fun factory(name: String): RsStubElementType<*, *> = when (name) {
     "LIFETIME" -> RsLifetimeStub.Type
     "LIFETIME_PARAMETER" -> RsLifetimeParameterStub.Type
     "FOR_LIFETIMES" -> RsPlaceholderStub.Type("FOR_LIFETIMES", ::RsForLifetimesImpl)
+    "TILDE_CONST" -> RsPlaceholderStub.Type("TILDE_CONST", ::RsTildeConstImpl)
     "TYPE_ARGUMENT_LIST" -> RsPlaceholderStub.Type("TYPE_ARGUMENT_LIST", ::RsTypeArgumentListImpl)
     "ASSOC_TYPE_BINDING" -> RsAssocTypeBindingStub.Type
 
@@ -2114,7 +2115,8 @@ class RsAssocTypeBindingStub(
 
 class RsPolyboundStub(
     parent: StubElement<*>?, elementType: IStubElementType<*, *>,
-    val hasQ: Boolean
+    val hasQ: Boolean,
+    val hasConst: Boolean
 ) : StubBase<RsPolybound>(parent, elementType) {
 
     object Type : RsStubElementType<RsPolyboundStub, RsPolybound>("POLYBOUND") {
@@ -2123,19 +2125,21 @@ class RsPolyboundStub(
         override fun deserialize(dataStream: StubInputStream, parentStub: StubElement<*>?) =
             RsPolyboundStub(
                 parentStub, this,
+                dataStream.readBoolean(),
                 dataStream.readBoolean()
             )
 
         override fun serialize(stub: RsPolyboundStub, dataStream: StubOutputStream) =
             with(dataStream) {
                 writeBoolean(stub.hasQ)
+                writeBoolean(stub.hasConst)
             }
 
         override fun createPsi(stub: RsPolyboundStub): RsPolybound =
             RsPolyboundImpl(stub, this)
 
         override fun createStub(psi: RsPolybound, parentStub: StubElement<*>?) =
-            RsPolyboundStub(parentStub, this, psi.hasQ)
+            RsPolyboundStub(parentStub, this, psi.hasQ, psi.hasConst)
     }
 }
 
