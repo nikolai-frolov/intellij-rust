@@ -6,7 +6,6 @@
 package org.rust.lang.core.types.ty
 
 import com.intellij.codeInsight.completion.CompletionUtil
-import org.rust.lang.core.psi.RsImplItem
 import org.rust.lang.core.psi.RsTraitItem
 import org.rust.lang.core.psi.RsTypeParameter
 import org.rust.lang.core.psi.ext.*
@@ -14,10 +13,10 @@ import org.rust.lang.core.types.BoundElement
 import org.rust.lang.core.types.HAS_TY_TYPE_PARAMETER_MASK
 import org.rust.lang.core.types.infer.resolve
 import org.rust.lang.core.types.regions.Region
-import org.rust.lang.core.types.type
 
 class TyTypeParameter private constructor(
     val parameter: TypeParameter,
+    @Deprecated("Use ImplLookup.isSized")
     val isSized: Boolean,
     traitBoundsSupplier: () -> Collection<BoundElement<RsTraitItem>>,
     regionBoundsSupplier: () -> Collection<Region>
@@ -56,14 +55,9 @@ class TyTypeParameter private constructor(
         fun self(): TyTypeParameter = self
 
         fun self(item: RsTraitOrImpl): TyTypeParameter {
-            val isSized = when (item) {
-                is RsTraitItem -> item.isSized
-                is RsImplItem -> item.typeReference?.type?.isSized() == true
-                else -> error("item must be instance of `RsTraitItem` or `RsImplItem`")
-            }
             return TyTypeParameter(
                 Self,
-                isSized,
+                false,
                 { listOfNotNull(item.implementedTrait) },
                 { emptyList() }
             )

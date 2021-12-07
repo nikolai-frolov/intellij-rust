@@ -1642,8 +1642,9 @@ private fun checkTypesAreSized(holder: RsAnnotationHolder, fn: RsFunction) {
     if (arguments.isEmpty() && retType == null) return
 
     val owner = fn.owner
+    val lookup = ImplLookup.relativeTo(fn)
 
-    fun isError(ty: Ty): Boolean = !ty.isSized() &&
+    fun isError(ty: Ty): Boolean = !lookup.isSized(ty) &&
         // '?Sized' type parameter types in abstract trait method is not an error
         !(owner is RsAbstractableOwner.Trait && fn.isAbstract)
 
